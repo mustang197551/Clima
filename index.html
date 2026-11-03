@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Clima Consenso</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{--bg:#0f172a;--card:#1e293b;--muted:#94a3b8;--txt:#f1f5f9;--acc:#38bdf8;--ok:#4ade80;--mid:#facc15;--bad:#f87171}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);padding:16px;max-width:560px;margin-inline:auto}
+  h1{font-size:1.1rem;margin:0 0 12px;color:var(--acc)}
+  .row{display:flex;gap:8px}
+  input{flex:1;padding:12px;border-radius:12px;border:1px solid #334155;background:var(--card);color:var(--txt);font-size:1rem}
+  button{padding:12px 14px;border-radius:12px;border:0;background:var(--acc);color:#0f172a;font-weight:600;font-size:.95rem}
+  .card{background:var(--card);border-radius:16px;padding:16px;margin-top:14px}
+  .muted{color:var(--muted);font-size:.85rem}
+  .big{font-size:3.2rem;font-weight:700;line-height:1}
+  .results button{display:block;width:100%;text-align:left;margin-top:6px;background:#334155;color:var(--txt);font-weight:400}
+  .hours{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+  .h{min-width:52px;text-align:center;font-size:.85rem}
+  .h b{display:block;font-size:1rem;margin:4px 0}
+  .day{display:grid;grid-template-columns:70px 28px 1fr 70px;align-items:center;gap:8px;padding:10px 0;border-top:1px solid #334155;cursor:pointer}
+  .day:first-of-type{border-top:0}
+  .bar{position:relative;height:8px;background:#334155;border-radius:4px}
+  .bar span{position:absolute;height:100%;border-radius:4px;background:linear-gradient(90deg,#38bdf8,#f97316)}
+  .conf{font-size:.75rem;padding:2px 8px;border-radius:999px;text-align:center}
+  .alta{background:#14532d;color:var(--ok)}.media{background:#713f12;color:var(--mid)}.baja{background:#7f1d1d;color:var(--bad)}
+  .detail{display:none;grid-column:1/-1;font-size:.85rem;background:#0f172a;border-radius:10px;padding:10px}
+  .day.open .detail{display:block}
+  table{width:100%;border-collapse:collapse}td{padding:3px 4px}td:not(:first-child){text-align:right}
+  .err{color:var(--bad)}
+  .top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .top h1{margin:0}
+  .burger{background:transparent;color:var(--txt);font-size:1.5rem;padding:4px 8px}
+  .drawer{position:fixed;top:0;left:0;bottom:0;width:250px;background:#111827;padding:20px 14px;transform:translateX(-100%);transition:transform .25s;z-index:20;box-shadow:4px 0 20px #0008}
+  .drawer.open{transform:none}
+  .drawer h2{font-size:1rem;color:var(--acc);margin:0 0 16px}
+  .drawer button{display:block;width:100%;text-align:left;background:transparent;color:var(--txt);font-weight:500;font-size:1rem;margin-bottom:6px}
+  .drawer button.act{background:#1e293b}
+  .shade{position:fixed;inset:0;background:#0007;display:none;z-index:10}
+  .shade.open{display:block}
+  .sunrow{display:grid;grid-template-columns:80px 1fr 1fr 70px;gap:8px;padding:10px 0;border-top:1px solid #334155;align-items:center}
+  .sunrow:first-of-type{border-top:0}
+  .sunbig{display:flex;justify-content:space-around;text-align:center;margin-top:10px}
+  .sunbig b{display:block;font-size:2rem}
+</style>
+</head>
+<body>
+<div class="shade" id="shade"></div>
+<nav class="drawer" id="drawer">
+  <h2>☁️ Clima Consenso</h2>
+  <button data-view="pronostico" class="act">🌤️ Pronóstico</button>
+  <button data-view="alertas">⚠️ Alertas</button>
+  <button data-view="sol">🌅 Salida y puesta del sol</button>
+  <button data-view="notif">🔔 Notificaciones</button>
+</nav>
+<div class="top">
+  <button class="burger" id="burger" aria-label="Menú">☰</button>
+  <h1>☁️ Clima Consenso</h1>
+</div>
+<div class="row">
+  <input id="q" placeholder="Buscar ciudad (ej: Córdoba)" autocomplete="off">
+  <button id="go">Buscar</button>
+  <button id="gps" title="Mi ubicación">📍</button>
+</div>
+<div class="results" id="results"></div>
+<div id="out"><div class="card muted">Buscá una ciudad o usá tu ubicación.</div></div>
+
+<script src="core.js"></script>
+<script src="config.js"></script>
+<script>
+const WMO = {0:["☀️","Despejado"],1:["🌤️","Mayormente despejado"],2:["⛅","Parcialmente nublado"],3:["☁️","Nublado"],45:["🌫️","Niebla"],48:["🌫️","Niebla con escarcha"],51:["🌦️","Llovizna débil"],53:["🌦️","Llovizna"],55:["🌧️","Llovizna intensa"],61:["🌧️","Lluvia débil"],63:["🌧️","Lluvia"],65:["🌧️","Lluvia fuerte"],66:["🌧️","Lluvia helada"],67:["🌧️","Lluvia helada fuerte"],71:["🌨️","Nieve débil"],73:["🌨️","Nieve"],75:["❄️","Nieve fuerte"],77:["🌨️","Granizo fino"],80:["🌦️","Chaparrones"],81:["🌧️","Chaparrones"],82:["⛈️","Chaparrones fuertes"],85:["🌨️","Nevadas"],86:["❄️","Nevadas fuertes"],95:["⛈️","Tormenta"],96:["⛈️","Tormenta con granizo"],99:["⛈️","Tormenta con granizo fuerte"]};
+const wmo = c => WMO[c] || ["❔","—"];
+const $ = id => document.getElementById(id);
+const DIAS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+
+async function search(){
+  const name = $("q").value.trim(); if(!name) return;
+  $("results").innerHTML = '<div class="muted">Buscando…</div>';
+  try{
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&language=es`);
+    const j = await r.json();
+    if(!j.results){ $("results").innerHTML='<div class="err">No encontré esa ciudad.</div>'; return; }
+    $("results").innerHTML = "";
+    j.results.forEach(p=>{
+      const b=document.createElement("button");
+      b.textContent = `${p.name}, ${p.admin1||""} (${p.country||""})`;
+      b.onclick=()=>{ $("results").innerHTML=""; load(p.latitude,p.longitude,p.name); };
+      $("results").appendChild(b);
+    });
+  }catch(e){ $("results").innerHTML='<div class="err">Sin conexión.</div>'; }
+}
+
+function gps(){
+  if(!navigator.geolocation){ alertBox("Tu navegador no permite ubicación."); return; }
+  navigator.geolocation.getCurrentPosition(
+    p=>load(p.coords.latitude,p.coords.longitude,"Mi ubicación"),
+    ()=>alertBox("No se pudo obtener la ubicación. Buscá la ciudad a mano."));
+}
+function alertBox(t){ $("out").innerHTML = `<div class="card err">${t}</div>`; }
+
+async function load(lat,lon,name){
+  try{ localStorage.setItem("ultima",JSON.stringify({lat,lon,name})); }catch(e){}
+  $("out").innerHTML='<div class="card muted">Cargando pronóstico…</div>';
+  const base = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto`;
+  const urlMain = base + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code"
+    + "&hourly=temperature_2m,precipitation_probability,weather_code&forecast_hours=24"
+    + "&daily=sunrise,sunset,daylight_duration&forecast_days=7";
+  const U = alertUrls(lat,lon);
+  const opt = u => fetch(u).then(r=>r.ok?r.json():null).catch(()=>null); // opcionales: si fallan, la app sigue
+  try{
+    const [a,b,cape,flood] = await Promise.all([fetch(urlMain).then(r=>r.json()), fetch(U.models).then(r=>r.json()), opt(U.cape), opt(U.flood)]);
+    DATA = {name,a,b,cape,flood};
+    DATA.alerts = computeAlerts(b,cape,flood);
+    show();
+  }catch(e){ alertBox("Error al consultar el pronóstico. Revisá tu conexión."); }
+}
+
+function render(name,a,b){
+  const c=a.current, [ic,desc]=wmo(c.weather_code);
+  let html = `<div class="card">
+    <div class="muted">${name}</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-top:6px">
+      <div class="big">${Math.round(c.temperature_2m)}°</div>
+      <div><div style="font-size:2rem">${ic}</div><div>${desc}</div></div>
+    </div>
+    <div class="muted" style="margin-top:8px">Sensación ${Math.round(c.apparent_temperature)}° · Humedad ${c.relative_humidity_2m}% · Viento ${Math.round(c.wind_speed_10m)} km/h</div>
+  </div>`;
+
+  const al = DATA?.alerts || [];
+  if(al.length){
+    const peor = Math.max(...al.map(x=>x.lvl)), N=NIVEL[peor];
+    const tipos=[...new Set(al.map(x=>x.icon+" "+x.tipo))].join(" · ");
+    html += `<div class="card" onclick="goView('alertas')" style="cursor:pointer;border:2px solid ${N.c};background:${N.bg}55">
+      <b style="color:${N.c}">⚠️ ${al.length} alerta${al.length>1?"s":""} en los próximos días (nivel máx. ${N.n.toLowerCase()})</b>
+      <div class="muted" style="margin-top:6px">${tipos}</div>
+      <div style="margin-top:6px;font-size:.85rem;color:var(--acc)">Ver detalle ›</div></div>`;
+  }
+
+  html += `<div class="card"><div class="muted">Próximas 24 h</div><div class="hours">`;
+  a.hourly.time.forEach((t,i)=>{
+    const p=a.hourly.precipitation_probability?.[i];
+    html += `<div class="h">${t.slice(11,16)}<b>${wmo(a.hourly.weather_code[i])[0]}</b>${Math.round(a.hourly.temperature_2m[i])}°<div class="muted">${p!=null?p+"%":""}</div></div>`;
+  });
+  html += `</div></div>`;
+
+  // Consenso entre modelos
+  const d=b.daily, keys=Object.keys(MODELS);
+  const get=(v,m,i)=>{ const arr=d[`${v}_${m}`]; return arr?arr[i]:null; };
+  const days=d.time.map((t,i)=>{
+    const rows=keys.map(m=>({m,max:get("temperature_2m_max",m,i),min:get("temperature_2m_min",m,i),pr:get("precipitation_sum",m,i),wc:get("weather_code",m,i)}))
+                   .filter(r=>r.max!=null&&r.min!=null);
+    if(!rows.length) return null;
+    const maxs=rows.map(r=>r.max), mins=rows.map(r=>r.min), prs=rows.map(r=>r.pr??0);
+    const spread=Math.max(...maxs)-Math.min(...maxs);
+    const lluvia=prs.filter(p=>p>=1).length;
+    const desacuerdoLluvia = lluvia>0 && lluvia<rows.length;
+    let conf = spread<=2 && !desacuerdoLluvia ? "alta" : (spread<=4 ? "media" : "baja");
+    if(desacuerdoLluvia && lluvia/rows.length>=0.3 && lluvia/rows.length<=0.7) conf = conf==="alta"?"media":conf;
+    const wcs=rows.map(r=>r.wc).filter(x=>x!=null);
+    return {t,rows,max:median(maxs),min:median(mins),pr:median(prs),lluvia,n:rows.length,conf,spread,wc:wcs.length?median(wcs):null};
+  }).filter(Boolean);
+
+  const lo=Math.min(...days.map(x=>x.min)), hi=Math.max(...days.map(x=>x.max)), span=Math.max(hi-lo,1);
+  html += `<div class="card"><div class="muted">Próximos 7 días</div>`;
+  days.forEach(x=>{
+    const dt=new Date(x.t+"T12:00");
+    const l=(x.min-lo)/span*100, w=(x.max-x.min)/span*100;
+    const frac = x.lluvia / x.n;
+    const lluviaTxt = frac >= 0.6 ? `🌧️ Lluvia probable (≈${Math.max(x.pr,1).toFixed(0)} mm)`
+                    : frac > 0 ? "🌦️ Posible lluvia" : "Sin lluvia";
+    html += `<div class="day">
+      <div>${DIAS[dt.getDay()]} ${dt.getDate()}${al.some(a=>a.fecha===x.t)?" ⚠️":""}<div class="conf ${x.conf}">${x.conf}</div></div>
+      <div style="font-size:1.3rem">${x.wc!=null?wmo(Math.round(x.wc))[0]:""}</div>
+      <div><div class="bar"><span style="left:${l}%;width:${Math.max(w,4)}%"></span></div><div class="muted" style="margin-top:4px">${lluviaTxt}</div></div>
+      <div style="text-align:right">${Math.round(x.min)}° / <b>${Math.round(x.max)}°</b></div>
+    </div>`;
+  });
+  html += `</div><p class="muted">Confianza: <b>alta</b> = pronóstico firme; <b>media</b> = puede variar un poco; <b>baja</b> = puede cambiar, volvé a mirarlo más cerca de la fecha.</p><p class="muted" style="font-size:.7rem;opacity:.6">Datos meteorológicos: <a href="https://open-meteo.com" style="color:inherit">Open-Meteo.com</a> (CC BY 4.0)</p>`;
+  $("out").innerHTML = html;
+}
+
+let DATA = null, VIEW = "pronostico";
+function show(){
+  if(!DATA) return;
+  if(VIEW==="sol") renderSol(DATA.name, DATA.a);
+  else if(VIEW==="notif") renderNotif();
+  else if(VIEW==="alertas") renderAlertas(DATA.name, DATA.alerts);
+  else render(DATA.name, DATA.a, DATA.b);
+}
+
+function alertCard(x){
+  const N=NIVEL[x.lvl], dt=new Date(x.fecha+"T12:00");
+  return `<div style="border-left:4px solid ${N.c};background:${N.bg}33;border-radius:10px;padding:10px 12px;margin-top:8px">
+    <div style="display:flex;justify-content:space-between;gap:8px"><b>${x.icon} ${x.tipo}</b><span style="color:${N.c};font-size:.8rem">${N.n}</span></div>
+    <div class="muted" style="margin-top:4px">${DIAS[dt.getDay()]} ${dt.getDate()} · ${x.txt}</div></div>`;
+}
+const AVISO = `<p class="muted" style="font-size:.75rem">Estas alertas son estimaciones automáticas de la app y <b>no reemplazan las alertas oficiales</b>. Ante una emergencia consultá al Servicio Meteorológico Nacional: <a href="https://www.smn.gob.ar/alertas" style="color:var(--acc)">smn.gob.ar/alertas</a></p>`;
+function renderAlertas(name,al){
+  let html=`<div class="card"><div class="muted">${name} · Alertas próximos 7 días</div>`;
+  html += al.length ? al.map(alertCard).join("") : `<div style="margin-top:10px">✅ No se prevén fenómenos peligrosos.</div>`;
+  html += `</div>`;
+  if(al.some(x=>x.tipo==="Rayos")) html += `<div class="card" style="font-size:.85rem">
+    <b>⚡ Ante rayos</b>
+    <ul style="margin:8px 0 0;padding-left:18px;line-height:1.5">
+      <li>Si escuchás truenos, ya estás al alcance de un rayo: buscá refugio en un edificio o un vehículo cerrado.</li>
+      <li>Alejate de árboles aislados, postes, alambrados, agua y lugares altos o descampados.</li>
+      <li>Esperá 30 minutos después del último trueno antes de volver a salir.</li>
+    </ul></div>`;
+  html += AVISO;
+  $("out").innerHTML=html;
+}
+const hm = s => s ? s.slice(11,16) : "—";
+function durTxt(sec){ const h=Math.floor(sec/3600), m=Math.round(sec%3600/60); return `${h} h ${m} min`; }
+function renderSol(name,a){
+  const d=a.daily;
+  if(!d || !d.sunrise){ $("out").innerHTML='<div class="card err">No hay datos de sol para este lugar.</div>'; return; }
+  let html = `<div class="card">
+    <div class="muted">${name} · Hoy</div>
+    <div class="sunbig">
+      <div>🌅<b>${hm(d.sunrise[0])}</b><span class="muted">Salida</span></div>
+      <div>🌇<b>${hm(d.sunset[0])}</b><span class="muted">Puesta</span></div>
+    </div>
+    <div class="muted" style="text-align:center;margin-top:12px">Horas de luz: ${durTxt(d.daylight_duration[0])}</div>
+  </div>`;
+  html += `<div class="card"><div class="muted">Próximos días</div>`;
+  d.time.forEach((t,i)=>{
+    const dt=new Date(t+"T12:00");
+    html += `<div class="sunrow"><div>${DIAS[dt.getDay()]} ${dt.getDate()}</div>
+      <div>🌅 ${hm(d.sunrise[i])}</div><div>🌇 ${hm(d.sunset[i])}</div>
+      <div class="muted" style="text-align:right">${Math.floor(d.daylight_duration[i]/3600)}h ${String(Math.round(d.daylight_duration[i]%3600/60)).padStart(2,"0")}m</div></div>`;
+  });
+  html += `</div>`;
+  $("out").innerHTML = html;
+}
+function renderNotif(){
+  const t=CONFIG.ntfyTema, niv={1:"amarillas, naranjas y rojas",2:"naranjas y rojas",3:"solo rojas"}[CONFIG.nivelMinimo]||"todas";
+  $("out").innerHTML=`<div class="card">
+    <b>🔔 Recibir alertas en el celular</b>
+    <p class="muted">Te llegan aunque la app esté cerrada, con sonido y vibración. Se revisa el pronóstico de <b>${CONFIG.ciudad}</b> cada hora y se avisa de alertas ${niv}.</p>
+    <ol style="padding-left:18px;line-height:1.6">
+      <li>Instalá la app <b>ntfy</b> desde Play Store (es gratis).</li>
+      <li>Abrila, tocá <b>+</b> y escribí este nombre de canal:<br>
+        <code style="background:#0f172a;padding:6px 10px;border-radius:8px;display:inline-block;margin-top:4px;user-select:all">${t}</code>
+        <button style="margin-top:6px;padding:6px 10px;font-size:.85rem" onclick="navigator.clipboard.writeText('${t}').then(()=>this.textContent='¡Copiado!').catch(()=>{})">Copiar</button></li>
+      <li>Tocá <b>Suscribirse</b>. Listo.</li>
+    </ol>
+    <p class="muted" style="font-size:.8rem">Para que suene fuerte en alertas rojas: en ntfy, entrá al canal → configuración → activá "Alertas urgentes" / "Mantener alarma".</p>
+  </div>`;
+}
+function menu(open){ $("drawer").classList.toggle("open",open); $("shade").classList.toggle("open",open); }
+$("burger").onclick=()=>menu(true);
+$("shade").onclick=()=>menu(false);
+function goView(v){
+  VIEW=v;
+  document.querySelectorAll("#drawer button").forEach(x=>x.classList.toggle("act",x.dataset.view===v));
+  menu(false);
+  if(v==="notif") renderNotif();
+  else if(DATA) show(); else $("out").innerHTML='<div class="card muted">Primero buscá una ciudad.</div>';
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("#drawer button").forEach(b=>b.onclick=()=>goView(b.dataset.view));
+
+$("go").onclick=search;
+$("q").addEventListener("keydown",e=>{ if(e.key==="Enter") search(); });
+$("gps").onclick=gps;
+(async()=>{
+  let u=null; try{ u=JSON.parse(localStorage.getItem("ultima")); }catch(e){}
+  if(u) return load(u.lat,u.lon,u.name);
+  try{
+    const [nom,prov]=CONFIG.ciudad.split(",").map(x=>x.trim());
+    const j=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(nom)}&count=10&language=es`).then(r=>r.json());
+    const p=(j.results||[]).find(r=>!prov||(r.admin1||"").toLowerCase().includes(prov.toLowerCase())) || (j.results||[])[0];
+    if(p) load(p.latitude,p.longitude,p.name);
+  }catch(e){}
+})();
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
