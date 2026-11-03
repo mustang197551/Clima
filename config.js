@@ -2,7 +2,7 @@
 globalThis.CONFIG = {
   // Ciudad que vigila el sistema de notificaciones (y la que abre la app la primera vez).
   // Si hay varias con el mismo nombre, agregá la provincia: "San Martín, Mendoza"
-  ciudad: "Buenos Aires",
+  ciudad: "Buenos Aires, Ciudad Autonoma de Buenos Aires",
 
   // Nombre del canal de notificaciones en la app ntfy. Funciona como una contraseña:
   // quien lo conozca recibe las alertas. Compartilo solo con quien quieras avisar.
